@@ -3,147 +3,78 @@
 package main
 
 import (
-	"encoding/json"
 	"syscall/js"
 
 	"minesweeper/game"
+	"minesweeper/viewmodel"
 )
 
-var currentBoard *game.Board
-
-// JavaScriptから呼ばれる関数: New Game
-func newGame(this js.Value, args []js.Value) interface{} {
-	currentBoard = game.NewBoard(10, 10, 10)
-	return getBoardState()
+// GameSession はゲームの状態を保持・管理します
+type GameSession struct {
+	board *game.Board
 }
 
-// JavaScriptから呼ばれる関数: Open
-func openCell(this js.Value, args []js.Value) interface{} {
+// アプリケーション全体で1つのセッションを管理
+var session = &GameSession{}
+
+// NewGame は新しいゲームを開始します
+func (s *GameSession) NewGame(width, height, mineCount int) string {
+	s.board = game.NewBoard(width, height, mineCount)
+	return viewmodel.NewGameView(s.board)
+}
+
+// Open は指定されたセルを開きます
+func (s *GameSession) Open(x, y int) string {
+	if s.board == nil {
+		return ""
+	}
+	s.board.Open(x, y)
+	return viewmodel.NewGameView(s.board)
+}
+
+// ToggleFlag はフラグを切り替えます
+func (s *GameSession) ToggleFlag(x, y int) string {
+	if s.board == nil {
+		return ""
+	}
+	s.board.ToggleFlag(x, y)
+	return viewmodel.NewGameView(s.board)
+}
+
+// --- 以下、JavaScriptから呼ばれるラッパー関数 ---
+
+func newGameWrapper(this js.Value, args []js.Value) interface{} {
+	// 将来的に引数で難易度設定を受け取れるように拡張可能
+	return session.NewGame(10, 10, 10)
+}
+
+func openCellWrapper(this js.Value, args []js.Value) interface{} {
 	if len(args) < 2 {
 		return nil
 	}
 	x := args[0].Int()
 	y := args[1].Int()
-
-	isSafe := currentBoard.Open(x, y)
-
-	jsonStr := getBoardState()
-
-	// ゲームオーバー情報を追加でねじ込む
-	// 本来は構造体を分けてJSON化すべきですが、今回は文字列操作で簡易対応
-	if !isSafe {
-		// JS側で判定しやすいようにフラグを仕込む等の処理が必要ですが、
-		// 今回は盤面データに含まれる IsMine で判定させます
-	}
-
-	return jsonStr
+	return session.Open(x, y)
 }
 
-// JavaScriptから呼ばれる関数: Flag
-func toggleFlag(this js.Value, args []js.Value) interface{} {
+func toggleFlagWrapper(this js.Value, args []js.Value) interface{} {
 	if len(args) < 2 {
 		return nil
 	}
 	x := args[0].Int()
 	y := args[1].Int()
-
-	currentBoard.ToggleFlag(x, y)
-	return getBoardState()
+	return session.ToggleFlag(x, y)
 }
-
-// 盤面状態をJSON文字列として返す
-func getBoardState() string {
-	type CellData struct {
-		State  string `json:"state"`
-		Count  int    `json:"count"`
-		IsMine bool   `json:"is_mine"`
-	}
-
-	// フロントエンドに送る全体のデータ構造
-	type GameState struct {
-		Cells          [][]CellData `json:"cells"`
-		MinesRemaining int          `json:"mines_remaining"` // 残り地雷数（表示用）
-		IsGameOver     bool         `json:"is_game_over"`
-		IsGameClear    bool         `json:"is_game_clear"`
-	}
-
-	h := currentBoard.Height
-	w := currentBoard.Width
-
-	// クリア判定
-	isClear := currentBoard.CheckClear()
-	// フラグの計算
-	flagCount := currentBoard.GetFlagCount()
-
-	grid := make([][]CellData, h)
-
-	// ゲームオーバー判定用フラグ（ループ内で検出）
-	isGameOver := false
-
-	for y := 0; y < h; y++ {
-		grid[y] = make([]CellData, w)
-		for x := 0; x < w; x++ {
-			c := currentBoard.Cells[y][x]
-			d := CellData{}
-
-			if c.IsRevealed {
-				d.State = "opened"
-				d.IsMine = c.IsMine
-				d.Count = c.NeighborCount
-				// もし開いたマスが地雷だったらゲームオーバー
-				if c.IsMine {
-					isGameOver = true
-				}
-			} else if c.IsFlagged {
-				d.State = "flagged"
-			} else {
-				d.State = "hidden"
-			}
-
-			// クリア時は全ての地雷にフラグを立てたような見た目にする（任意）
-			if isClear && c.IsMine {
-				d.State = "flagged"
-			}
-
-			grid[y][x] = d
-		}
-	}
-
-	// ゲームオーバー時は全地雷をオープンにする処理
-	if isGameOver {
-		for y := 0; y < h; y++ {
-			for x := 0; x < w; x++ {
-				if currentBoard.Cells[y][x].IsMine {
-					grid[y][x].State = "opened"
-					grid[y][x].IsMine = true
-				}
-			}
-		}
-	}
-
-	state := GameState{
-		Cells:          grid,
-		MinesRemaining: currentBoard.MineCount - flagCount, // 全地雷 - フラグ数
-		IsGameOver:     isGameOver,
-		IsGameClear:    isClear,
-	}
-
-	bytes, _ := json.Marshal(state)
-	return string(bytes)
-}
-
-// (後略: main関数などはそのままでOK)
 
 func main() {
 	c := make(chan struct{})
 
-	// JavaScriptのグローバル関数としてGoの関数を登録
-	js.Global().Set("goNewGame", js.FuncOf(newGame))
-	js.Global().Set("goOpenCell", js.FuncOf(openCell))
-	js.Global().Set("goToggleFlag", js.FuncOf(toggleFlag))
+	// JSへの関数登録
+	js.Global().Set("goNewGame", js.FuncOf(newGameWrapper))
+	js.Global().Set("goOpenCell", js.FuncOf(openCellWrapper))
+	js.Global().Set("goToggleFlag", js.FuncOf(toggleFlagWrapper))
 
-	println("Go WebAssembly Initialized")
+	println("Go WebAssembly Initialized (Refactored)")
 
-	// プログラムが終了しないように待機
 	<-c
 }

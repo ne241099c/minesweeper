@@ -6,6 +6,11 @@ import (
 	"time"
 )
 
+// パッケージ初期化時に一度だけ乱数シードを設定
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
 // NewBoard はメモリ確保だけ行います
 func NewBoard(width, height, mineCount int) *Board {
 	cells := make([][]Cell, height)
@@ -24,9 +29,9 @@ func NewBoard(width, height, mineCount int) *Board {
 
 // InitializeMines は最初のクリック位置(safeX, safeY)を避けて地雷を配置します
 func (b *Board) InitializeMines(safeX, safeY int) {
-	rand.New(rand.NewSource(time.Now().UnixNano()))
-	minesPlaced := 0
+	// rand.Seedはinitで行っているため削除
 
+	minesPlaced := 0
 	for minesPlaced < b.MineCount {
 		x := rand.Intn(b.Width)
 		y := rand.Intn(b.Height)
@@ -36,8 +41,7 @@ func (b *Board) InitializeMines(safeX, safeY int) {
 			continue
 		}
 
-		// 初回クリック位置の「周囲9マス」には地雷を置かない（確実に0にするため）
-		// Math.Abs的なロジックで距離判定
+		// 初回クリック位置の「周囲9マス」には地雷を置かない
 		if x >= safeX-1 && x <= safeX+1 && y >= safeY-1 && y <= safeY+1 {
 			continue
 		}
@@ -82,7 +86,6 @@ func (b *Board) Open(x, y int) bool {
 		return true
 	}
 
-	// ★ここで初回判定を行う
 	if !b.IsInitialized {
 		b.InitializeMines(x, y)
 	}
@@ -121,11 +124,9 @@ func (b *Board) ToggleFlag(x, y int) {
 }
 
 func (b *Board) DebugPrint() {
-	// (省略: 前回と同じ)
 	fmt.Println("DebugPrint called")
 }
 
-// GetFlagCount は現在立てられているフラグの数を返します
 func (b *Board) GetFlagCount() int {
 	count := 0
 	for y := 0; y < b.Height; y++ {
@@ -138,8 +139,6 @@ func (b *Board) GetFlagCount() int {
 	return count
 }
 
-// CheckClear はゲームクリアしているか判定します
-// 条件: (全マス - 開いたマス) == 地雷数
 func (b *Board) CheckClear() bool {
 	revealedCount := 0
 	for y := 0; y < b.Height; y++ {
@@ -149,6 +148,5 @@ func (b *Board) CheckClear() bool {
 			}
 		}
 	}
-	// まだ開いていないマスの数が地雷の数と一致すればクリア
 	return (b.Width*b.Height - revealedCount) == b.MineCount
 }

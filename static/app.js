@@ -7,19 +7,30 @@ WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((resu
 });
 
 function render(jsonStr) {
-    const gameState = JSON.parse(jsonStr);
-    const grid = gameState.cells;
+    if (!jsonStr || jsonStr === "{}") {
+        console.warn("Received empty state");
+        return;
+    }
+
+    let gameState;
+    try {
+        gameState = JSON.parse(jsonStr);
+    } catch (e) {
+        console.error("JSON Parse Error:", e, jsonStr);
+        return;
+    }
     
+    const grid = gameState.cells;
+    if (!grid) return; // データがない場合は終了
+
     const board = document.getElementById('board');
     board.innerHTML = '';
     
     const status = document.getElementById('status');
     const mineCountSpan = document.getElementById('mine-count');
 
-    // 残り地雷数の更新
-    mineCountSpan.innerText = gameState.mines_remaining;
+    if (mineCountSpan) mineCountSpan.innerText = gameState.mines_remaining;
 
-    // ステータス表示
     if (gameState.is_game_over) {
         status.innerText = "GAME OVER!";
         status.style.color = "red";
@@ -30,7 +41,6 @@ function render(jsonStr) {
         status.innerText = "";
     }
 
-    // ゲーム終了時はクリックできないようにするフラグ
     const isFinished = gameState.is_game_over || gameState.is_game_clear;
 
     grid.forEach((row, y) => {
@@ -49,7 +59,6 @@ function render(jsonStr) {
                 }
             } else if (cell.state === 'flagged') {
                 div.innerText = "🚩";
-                // ゲーム中でなければ右クリック解除可能
                 if (!isFinished) {
                     div.oncontextmenu = (e) => {
                         e.preventDefault();
@@ -57,7 +66,6 @@ function render(jsonStr) {
                     };
                 }
             } else {
-                // 未開封
                 if (!isFinished) {
                     div.onclick = () => openCell(x, y);
                     div.oncontextmenu = (e) => {
@@ -71,15 +79,19 @@ function render(jsonStr) {
     });
 }
 
-// Goの関数を呼び出すラッパー
 function openCell(x, y) {
-    const jsonStr = goOpenCell(x, y); // Goの関数を直接実行！
-    render(jsonStr);
+    console.log(`Click: ${x}, ${y}`); // デバッグログ
+    if (typeof goOpenCell === 'function') {
+        const jsonStr = goOpenCell(x, y);
+        render(jsonStr);
+    }
 }
 
 function toggleFlag(x, y) {
-    const jsonStr = goToggleFlag(x, y); // Goの関数を直接実行！
-    render(jsonStr);
+    if (typeof goToggleFlag === 'function') {
+        const jsonStr = goToggleFlag(x, y);
+        render(jsonStr);
+    }
 }
 
 function resetGame() {

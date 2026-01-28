@@ -31,7 +31,6 @@ body {
     user-select: none;
 }
 
-
 .cell:hover { background-color: #aaa; }
 .cell.opened { background-color: #ddd; color: black; cursor: default; }
 .cell.mine { background-color: red !important; }
@@ -39,3 +38,51 @@ body {
 .cell.n2 { color: green; }
 .cell.n3 { color: red; }
 .cell.n4 { color: darkblue; }
+
+/* Controls styling */
+.controls {
+    background: #333;
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 5px;
+}
+
+.controls-dark {
+    background: #444;
+}
+
+.input-group {
+    display: inline-block;
+    margin-right: 15px;
+}
+
+label {
+    color: #ccc;
+    font-size: 12px;
+    display: block;
+}
+
+input[type="number"] {
+    width: 50px;
+}
+
+button {
+    cursor: pointer;
+    padding: 5px 10px;
+}
+
+.btn-primary {
+    background: #2196F3;
+    color: white;
+}
+
+.btn-danger {
+    background: #f44336;
+    color: white;
+}
+
+.btn-warning {
+    background: #FF9800;
+    color: white;
+    margin-left: 20px;
+}

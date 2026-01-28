@@ -18,19 +18,10 @@ type GameSession struct {
 
 var session = &GameSession{}
 
-// NewGame: autoOpen引数を追加
-func (s *GameSession) NewGame(width, height, mineCount int, autoOpen bool) string {
+// NewGame: autoOpen引数を削除
+func (s *GameSession) NewGame(width, height, mineCount int) string {
 	s.board = game.NewBoard(width, height, mineCount)
-
-	// 最初にランダムで1マス開けるオプション
-	if autoOpen {
-		// Solverのランダムロジックを借用して安全な場所（未開封）を一つ選ぶ
-		bot := solver.New(s.board)
-		if move := bot.NextMove(); move != nil {
-			s.board.Open(move.X, move.Y)
-		}
-	}
-
+	// Botの最初の手はBot自身（solver）がランダムに決めるため、ここでは何もしない
 	return viewmodel.NewGameView(s.board)
 }
 
@@ -65,7 +56,7 @@ func (s *GameSession) BotStep() string {
 	return viewmodel.NewGameView(s.board)
 }
 
-// --- ベンチマーク機能（高速周回） ---
+// --- ベンチマーク機能 ---
 func runBenchmarkWrapper(this js.Value, args []js.Value) interface{} {
 	width := args[0].Int()
 	height := args[1].Int()
@@ -76,30 +67,22 @@ func runBenchmarkWrapper(this js.Value, args []js.Value) interface{} {
 	start := time.Now()
 
 	for i := 0; i < runs; i++ {
-		// 画面更新なしでゲームを作成
 		b := game.NewBoard(width, height, mines)
 		bot := solver.New(b)
 
-		// ゲーム終了までループ
 		for {
-			// クリアかゲームオーバーで終了
 			if b.CheckClear() {
 				wins++
 				break
 			}
-			// 地雷を踏んでいたら終了（CheckClearでは判定できない敗北状態）
-			// ※Solverは地雷を踏むとNextMoveを返さないわけではないが、
-			//   Board.Openがfalseを返した時点でループを抜ける必要がある
-
 			move := bot.NextMove()
 			if move == nil {
-				break // 手詰まり（通常ありえない）
+				break
 			}
 
 			if move.Type == solver.MoveOpen {
-				safe := b.Open(move.X, move.Y)
-				if !safe {
-					break // 爆発
+				if !b.Open(move.X, move.Y) {
+					break
 				}
 			} else {
 				b.ToggleFlag(move.X, move.Y)
@@ -108,8 +91,6 @@ func runBenchmarkWrapper(this js.Value, args []js.Value) interface{} {
 	}
 
 	duration := time.Since(start)
-
-	// 結果を文字列で返す
 	return fmt.Sprintf("Benchmark Result:\nRuns: %d\nWins: %d (%.1f%%)\nTime: %v\nSpeed: %.0f games/sec",
 		runs, wins, float64(wins)/float64(runs)*100, duration, float64(runs)/duration.Seconds())
 }
@@ -118,18 +99,12 @@ func runBenchmarkWrapper(this js.Value, args []js.Value) interface{} {
 
 func newGameWrapper(this js.Value, args []js.Value) interface{} {
 	w, h, m := 10, 10, 10
-	autoOpen := false
-
 	if len(args) >= 3 {
 		w = args[0].Int()
 		h = args[1].Int()
 		m = args[2].Int()
 	}
-	if len(args) >= 4 {
-		autoOpen = args[3].Bool()
-	}
-
-	return session.NewGame(w, h, m, autoOpen)
+	return session.NewGame(w, h, m)
 }
 
 func openCellWrapper(this js.Value, args []js.Value) interface{} {
@@ -151,16 +126,14 @@ func botStepWrapper(this js.Value, args []js.Value) interface{} {
 }
 
 func main() {
-	c := make(chan struct{})
+	c := make(chan struct{}, 0)
 
 	js.Global().Set("goNewGame", js.FuncOf(newGameWrapper))
 	js.Global().Set("goOpenCell", js.FuncOf(openCellWrapper))
 	js.Global().Set("goToggleFlag", js.FuncOf(toggleFlagWrapper))
 	js.Global().Set("goBotStep", js.FuncOf(botStepWrapper))
-
-	// 新機能
 	js.Global().Set("goRunBenchmark", js.FuncOf(runBenchmarkWrapper))
 
-	println("Go WebAssembly Initialized (Benchmark Ready)")
+	println("Go WebAssembly Initialized (Random Start Removed)")
 	<-c
 }

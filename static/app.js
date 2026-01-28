@@ -2,18 +2,14 @@ const go = new Go();
 WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
     go.run(result.instance);
     console.log("WASM Loaded");
-    // 初回はBotを動かさずに初期化
     resetGame(false);
 });
 
-// 設定取得
 function getSettings() {
     const w = parseInt(document.getElementById('width').value) || 10;
     const h = parseInt(document.getElementById('height').value) || 10;
     const m = parseInt(document.getElementById('mines').value) || 10;
-    // ランダムオープンのチェックボックス
-    const autoOpen = document.getElementById('auto-open').checked;
-    return { w, h, m, autoOpen };
+    return { w, h, m };
 }
 
 const botLoopState = {
@@ -22,25 +18,22 @@ const botLoopState = {
     currentRun: 0,
     maxRuns: 0,
     wins: 0,
-    isBotReset: false
+    isBotReset: false,
+    isPaused: false // ポーズフラグ
 };
 
-// ゲームリセット（最重要修正箇所）
 function resetGame(isBotReset = false) {
-    // 人間がボタンを押した場合、Botループを強制停止
     if (!isBotReset) {
         stopBotLoop();
     }
 
     if (typeof goNewGame === 'function') {
-        const { w, h, m, autoOpen } = getSettings();
-        // Botによるリセットの場合は「ランダムオープン」はBotの裁量に任せる（今回は設定に従う）
-        const jsonStr = goNewGame(w, h, m, autoOpen);
+        const { w, h, m } = getSettings();
+        const jsonStr = goNewGame(w, h, m);
         render(jsonStr);
     }
 }
 
-// Botループ開始（画面更新あり）
 function startBotLoop() {
     if (botLoopState.isRunning) return;
 
@@ -49,22 +42,54 @@ function startBotLoop() {
     botLoopState.currentRun = 0;
     botLoopState.wins = 0;
     botLoopState.isRunning = true;
+    botLoopState.isPaused = false; // 開始時はポーズ解除
     
-    // Bot開始時は強制的にリセットしてスタート
+    // ボタンの見た目を更新
+    updatePauseButton();
+    
     resetGame(true);
     runBotInterval();
+}
+
+// ポーズボタンの切り替え
+function toggleBotLoop() {
+    if (!botLoopState.isRunning) return;
+
+    botLoopState.isPaused = !botLoopState.isPaused;
+    updatePauseButton();
+}
+
+function updatePauseButton() {
+    const btn = document.getElementById('bot-pause-btn');
+    if (btn) {
+        if (botLoopState.isPaused) {
+            btn.innerText = "▶ Resume";
+            btn.style.backgroundColor = "#4CAF50"; // 緑色（再生）
+        } else {
+            btn.innerText = "⏸ Pause";
+            btn.style.backgroundColor = "#f44336"; // 赤色（停止っぽい色）
+        }
+    }
 }
 
 function stopBotLoop() {
     if (botLoopState.intervalId) clearInterval(botLoopState.intervalId);
     botLoopState.isRunning = false;
     botLoopState.intervalId = null;
+    botLoopState.isPaused = false;
+    // ボタンをPauseに戻しておく（次回用）
+    updatePauseButton();
 }
 
 function runBotInterval() {
     botLoopState.intervalId = setInterval(() => {
         if (!botLoopState.isRunning) {
             stopBotLoop();
+            return;
+        }
+
+        // ポーズ中は処理をスキップ
+        if (botLoopState.isPaused) {
             return;
         }
 
@@ -76,6 +101,10 @@ function runBotInterval() {
             render(jsonStr);
 
             if (state.is_game_over || state.is_game_clear) {
+                // ここではインターバルを止めず、次へ進む処理をする
+                // ただし、もしここでポーズさせたいなら考慮が必要だが、
+                // 今回は「ゲーム終了→次へ」の流れは止まらないものとする
+                
                 clearInterval(botLoopState.intervalId);
                 
                 if (state.is_game_clear) botLoopState.wins++;
@@ -84,7 +113,6 @@ function runBotInterval() {
                 updateStatus(`Game ${botLoopState.currentRun}/${botLoopState.maxRuns} (Wins: ${botLoopState.wins})`);
 
                 if (botLoopState.currentRun < botLoopState.maxRuns) {
-                    // 0.5秒待って次へ
                     setTimeout(() => {
                         if (!botLoopState.isRunning) return;
                         resetGame(true);
@@ -96,28 +124,26 @@ function runBotInterval() {
                 }
             }
         }
-    }, 50); // 速度調整
+    }, 50);
 }
 
-// ベンチマーク実行（画面更新なし・超高速）
+// ベンチマーク実行
 function runBenchmark() {
-    stopBotLoop(); // 通常ループは止める
+    stopBotLoop();
     const { w, h, m } = getSettings();
     const runs = parseInt(document.getElementById('bot-runs').value) || 100;
     
     updateStatus("Running benchmark... please wait.");
     
-    // UIが固まらないように少し待ってから実行
     setTimeout(() => {
         if (typeof goRunBenchmark === 'function') {
             const result = goRunBenchmark(w, h, m, runs);
-            alert(result); // 結果をアラートまたはログに出す
+            alert(result);
             updateStatus("Benchmark finished.");
         }
     }, 100);
 }
 
-// 表示系ヘルパー
 function updateStatus(msg) {
     const el = document.getElementById('status');
     if (el) el.innerText = msg;
@@ -147,11 +173,9 @@ function render(jsonStr) {
         });
     }
 
-    // 残り地雷数
     const mineEl = document.getElementById('mine-count');
     if (mineEl) mineEl.innerText = gameState.mines_remaining;
 
-    // ステータス（Bot実行中は上書きしない）
     if (!botLoopState.isRunning) {
         if (gameState.is_game_over) updateStatus("GAME OVER");
         else if (gameState.is_game_clear) updateStatus("CLEARED!");

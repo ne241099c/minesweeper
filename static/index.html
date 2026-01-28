@@ -5,13 +5,6 @@
     <link rel="stylesheet" href="style.css">
     <script src="wasm_exec.js"></script>
     <script src="app.js"></script>
-    <style>
-        .controls { background: #333; padding: 10px; margin: 10px 0; border-radius: 5px; }
-        .input-group { display: inline-block; margin-right: 15px; }
-        label { color: #ccc; font-size: 12px; display: block; }
-        input[type="number"] { width: 50px; }
-        button { cursor: pointer; padding: 5px 10px; }
-    </style>
 </head>
 <body>
     <h1>Minesweeper Bot</h1>
@@ -26,20 +19,18 @@
         <div class="input-group">
             <label>Mines</label><input type="number" id="mines" value="10">
         </div>
-        <div class="input-group">
-            <label>Random Start</label>
-            <input type="checkbox" id="auto-open"> </div>
         <button onclick="resetGame()">New Game</button>
     </div>
 
-    <div class="controls" style="background: #444;">
+    <div class="controls controls-dark">
         <div class="input-group">
             <label>Runs</label><input type="number" id="bot-runs" value="100">
         </div>
-        <button onclick="startBotLoop()" style="background: #2196F3; color: white;">▶ Watch Bot</button>
-        <button onclick="stopBotLoop()" style="background: #f44336; color: white;">Stop</button>
         
-        <button onclick="runBenchmark()" style="background: #FF9800; color: white; margin-left: 20px;">⚡ Benchmark (Fast)</button>
+        <button id="start-btn" onclick="startBotLoop()" class="btn-primary">▶ Watch Bot</button>
+        <button id="bot-pause-btn" onclick="toggleBotLoop()" class="btn-danger">⏸ Pause</button>
+        
+        <button onclick="runBenchmark()" class="btn-warning">⚡ Benchmark (Fast)</button>
     </div>
 
     <h3>Mines: <span id="mine-count">--</span> | <span id="status"></span></h3>

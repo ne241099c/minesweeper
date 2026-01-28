@@ -13,4 +13,5 @@ type Board struct {
 	MineCount     int
 	Cells         [][]Cell
 	IsInitialized bool // 初回クリックが終わったかどうか
+	IsGameOver    bool // ゲームオーバーフラグ
 }

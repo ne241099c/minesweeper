@@ -24,6 +24,7 @@ func NewBoard(width, height, mineCount int) *Board {
 		MineCount:     mineCount,
 		Cells:         cells,
 		IsInitialized: false,
+		IsGameOver:    false,
 	}
 }
 
@@ -98,6 +99,7 @@ func (b *Board) Open(x, y int) bool {
 	cell.IsRevealed = true
 
 	if cell.IsMine {
+		b.IsGameOver = true
 		return false // ゲームオーバー
 	}
 

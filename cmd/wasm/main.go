@@ -43,8 +43,21 @@ func (s *GameSession) ToggleFlag(x, y int) string {
 
 // BotStep はBotに1手進めさせます
 func (s *GameSession) BotStep() string {
-	if s.board == nil || s.board.CheckClear() {
+	if s.board == nil {
 		return ""
+	}
+
+	// ゲームが既に終了している場合は現在の状態を返す
+	if s.board.IsGameOver || s.board.CheckClear() {
+		return viewmodel.NewGameView(s.board)
+	}
+
+	// ボードが初期化されていない場合、最初に中央のセルを開く
+	if !s.board.IsInitialized {
+		centerX := s.board.Width / 2
+		centerY := s.board.Height / 2
+		s.board.Open(centerX, centerY)
+		return viewmodel.NewGameView(s.board)
 	}
 
 	// Botを初期化して次の手を計算

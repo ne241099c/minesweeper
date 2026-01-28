@@ -31,6 +31,7 @@ function resetGame() {
 const botLoopState = {
     intervalId: null,
     isRunning: false,
+    isPaused: false,
     currentRun: 0,
     maxRuns: 0,
     wins: 0,
@@ -47,12 +48,17 @@ function startBotLoop() {
     botLoopState.wins = 0;
     botLoopState.losses = 0;
     botLoopState.isRunning = true;
-    botLoopState.isLoopingReset = false;
+    botLoopState.isPaused = false;
+    botLoopState.isLoopingReset = true; // 最初のresetGameでstopされないように
 
     console.log(`Starting Bot Loop: ${runs} games`);
     
+    // UIボタンの更新
+    updateBotButtons();
+    
     // 最初のゲームを開始
     resetGame();
+    botLoopState.isLoopingReset = false;
     runBotInterval();
 }
 
@@ -61,14 +67,16 @@ function stopBotLoop() {
         clearInterval(botLoopState.intervalId);
     }
     botLoopState.isRunning = false;
+    botLoopState.isPaused = false;
     botLoopState.intervalId = null;
+    updateBotButtons();
     console.log("Bot Loop Stopped");
 }
 
 function runBotInterval() {
     // 0.05秒ごとにBotを動かす
     botLoopState.intervalId = setInterval(() => {
-        if (!botLoopState.isRunning) return;
+        if (!botLoopState.isRunning || botLoopState.isPaused) return;
 
         if (typeof goBotStep === 'function') {
             const jsonStr = goBotStep();
@@ -211,5 +219,41 @@ function toggleAutoBot() {
         stopBotLoop();
     } else {
         startBotLoop();
+    }
+}
+
+function togglePauseBot() {
+    if (!botLoopState.isRunning) return;
+    
+    botLoopState.isPaused = !botLoopState.isPaused;
+    updateBotButtons();
+    
+    if (botLoopState.isPaused) {
+        console.log("Bot Paused");
+    } else {
+        console.log("Bot Resumed");
+    }
+}
+
+function updateBotButtons() {
+    const autoPlayBtn = document.getElementById('auto-play-btn');
+    const pauseBtn = document.getElementById('pause-btn');
+    
+    if (botLoopState.isRunning) {
+        autoPlayBtn.innerText = '🛑 Stop';
+        autoPlayBtn.style.backgroundColor = '#f44336';
+        pauseBtn.style.display = 'inline-block';
+        
+        if (botLoopState.isPaused) {
+            pauseBtn.innerText = '▶️ Resume';
+            pauseBtn.style.backgroundColor = '#4CAF50';
+        } else {
+            pauseBtn.innerText = '⏸️ Pause';
+            pauseBtn.style.backgroundColor = '#FF9800';
+        }
+    } else {
+        autoPlayBtn.innerText = '🤖 Auto Play';
+        autoPlayBtn.style.backgroundColor = '#2196F3';
+        pauseBtn.style.display = 'none';
     }
 }

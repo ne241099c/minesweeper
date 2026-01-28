@@ -3,6 +3,8 @@ services:
     # 現在のディレクトリにあるDockerfileを使ってビルドする
     build: .
     # コンテナの名前
+    ports:
+      - "8080:8080"
     container_name: minesweeper-dev
     # PCの現在のフォルダ(.)を、コンテナの/appに同期する
     # これにより、PCでコードを編集するとコンテナ内にも即座に反映されます

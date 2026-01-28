@@ -1,0 +1,35 @@
+body {
+    font-family: sans-serif;
+    text-align: center;
+    background-color: #222;
+    color: white;
+}
+
+#board {
+    display: inline-grid;
+    grid-template-columns: repeat(10, 30px);
+    gap: 2px;
+    background: #555;
+    padding: 5px;
+    margin-top: 20px;
+}
+
+.cell {
+    width: 30px;
+    height: 30px;
+    background-color: #999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-weight: bold;
+    user-select: none;
+}
+
+.cell:hover { background-color: #aaa; }
+.cell.opened { background-color: #ddd; color: black; cursor: default; }
+.cell.mine { background-color: red !important; }
+.cell.n1 { color: blue; }
+.cell.n2 { color: green; }
+.cell.n3 { color: red; }
+.cell.n4 { color: darkblue; }

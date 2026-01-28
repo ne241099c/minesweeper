@@ -2,13 +2,14 @@ package main
 
 import (
 	"fmt"
-	"minesweeper/game"
+	"log"
+	"net/http"
 )
 
 func main() {
-	// gameパッケージのNewBoard関数を呼び出す
-	b := game.NewBoard(10, 10, 10)
+	// staticフォルダの中身（html, js, wasm）をそのまま配信するだけ
+	http.Handle("/", http.FileServer(http.Dir("static")))
 
-	fmt.Println("--- 生成された盤面 ---")
-	b.DebugPrint()
+	fmt.Println("File Server starting on :8080...")
+	log.Fatal(http.ListenAndServe("0.0.0.0:8080", nil))
 }

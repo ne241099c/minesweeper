@@ -47,12 +47,12 @@ func main() {
 }
 
 func playGameAndRecord(writer *csv.Writer) {
-	// AI学習用には「中級」程度の密度が良い
+	// AI学習用には中級程度の密度が良い
 	w, h, mines := 9, 9, 10
 	b := game.NewBoard(w, h, mines)
 
 	// 最初の一手（ランダムオープン）
-	bot := solver.New(b)
+	bot := solver.New(b, solver.ModeHybrid)
 	if first := bot.NextMove(); first != nil {
 		b.Open(first.X, first.Y)
 	}

@@ -12,6 +12,7 @@ import (
 	"minesweeper/viewmodel"
 )
 
+// GameSession はゲームの状態と統計情報を管理します
 type GameSession struct {
 	board *game.Board
 	stats struct {
@@ -19,15 +20,34 @@ type GameSession struct {
 		AI     int
 		Random int
 	}
+	mode solver.SolverMode // 現在のBotモード
 }
 
-var session = &GameSession{}
+// デフォルトはHybridモード
+var session = &GameSession{mode: solver.ModeHybrid}
 
+// モード切替関数 (JSから呼ばれる)
+func setSolverModeWrapper(_ js.Value, args []js.Value) interface{} {
+	if len(args) > 0 {
+		modeStr := args[0].String()
+		if modeStr == "pure" {
+			session.mode = solver.ModePureAI
+			return "Switched to Pure AI Mode"
+		}
+	}
+	session.mode = solver.ModeHybrid
+	return "Switched to Hybrid Mode"
+}
+
+// NewGame: ゲームと統計をリセットします
 func (s *GameSession) NewGame(width, height, mineCount int) string {
 	s.board = game.NewBoard(width, height, mineCount)
+
+	// 統計リセット
 	s.stats.Logic = 0
 	s.stats.AI = 0
 	s.stats.Random = 0
+
 	return viewmodel.NewGameView(s.board, "")
 }
 
@@ -47,23 +67,27 @@ func (s *GameSession) ToggleFlag(x, y int) string {
 	return viewmodel.NewGameView(s.board, "")
 }
 
+// BotStep: Botに1手進めさせ、統計を取ります
 func (s *GameSession) BotStep() string {
 	if s.board == nil || s.board.CheckClear() {
 		return "{}"
 	}
-	bot := solver.New(s.board)
+	// モードを指定してSolverを作成
+	bot := solver.New(s.board, s.mode)
 
 	var move *solver.Move
 	if move = bot.NextMove(); move != nil {
+		// 戦略ごとの統計カウント
 		switch move.Strategy {
-		case "Logic":
+		case "Logic", "Advanced", "Tank":
 			s.stats.Logic++
-		case "AI":
+		case "AI", "PureAI", "Tank(Prob)": // AI関連
 			s.stats.AI++
 		case "Random":
 			s.stats.Random++
 		}
 
+		// 行動実行
 		if move.Type == solver.MoveOpen {
 			s.board.Open(move.X, move.Y)
 		} else {
@@ -71,9 +95,11 @@ func (s *GameSession) BotStep() string {
 		}
 	}
 
+	// レポート作成
 	report := ""
 	isGameOver := false
 	if move != nil && move.Type == solver.MoveOpen {
+		// 範囲内チェック
 		if move.Y >= 0 && move.Y < s.board.Height && move.X >= 0 && move.X < s.board.Width {
 			if s.board.Cells[move.Y][move.X].IsMine && s.board.Cells[move.Y][move.X].IsRevealed {
 				isGameOver = true
@@ -100,7 +126,6 @@ func runBenchmarkWrapper(_ js.Value, args []js.Value) interface{} {
 	mines := args[2].Int()
 	runs := args[3].Int()
 
-	// 第5引数にコールバック関数(JS)を受け取る
 	var callback js.Value
 	if len(args) >= 5 && args[4].Type() == js.TypeFunction {
 		callback = args[4]
@@ -109,11 +134,13 @@ func runBenchmarkWrapper(_ js.Value, args []js.Value) interface{} {
 	wins := 0
 	start := time.Now()
 
+	// 現在のセッションモードを使用
+	benchMode := session.mode
+
 	for i := 0; i < runs; i++ {
 		b := game.NewBoard(width, height, mines)
-		bot := solver.New(b)
+		bot := solver.New(b, benchMode)
 
-		// 1ゲームごとの統計
 		logicCnt, aiCnt, randomCnt := 0, 0, 0
 		var lastMove *solver.Move
 		isWin := false
@@ -130,11 +157,10 @@ func runBenchmarkWrapper(_ js.Value, args []js.Value) interface{} {
 			}
 			lastMove = move
 
-			// 統計カウント
 			switch move.Strategy {
-			case "Logic":
+			case "Logic", "Advanced", "Tank":
 				logicCnt++
-			case "AI":
+			case "AI", "PureAI", "Tank(Prob)":
 				aiCnt++
 			case "Random":
 				randomCnt++
@@ -149,7 +175,6 @@ func runBenchmarkWrapper(_ js.Value, args []js.Value) interface{} {
 			}
 		}
 
-		// 1ゲームごとのレポート出力（コールバック実行）
 		if callback.Type() == js.TypeFunction {
 			resStr := "💥 OVER "
 			if isWin {
@@ -163,7 +188,6 @@ func runBenchmarkWrapper(_ js.Value, args []js.Value) interface{} {
 				lastConf = lastMove.Confidence * 100
 			}
 
-			// 1行ログを作成
 			logMsg := fmt.Sprintf("[%03d/%d] %s (L:%d, A:%d, R:%d) Last: %s(%.1f%%)",
 				i+1, runs, resStr, logicCnt, aiCnt, randomCnt, lastStrat, lastConf)
 
@@ -172,11 +196,16 @@ func runBenchmarkWrapper(_ js.Value, args []js.Value) interface{} {
 	}
 
 	duration := time.Since(start)
-	return fmt.Sprintf("Benchmark Finished:\nRuns: %d, Wins: %d (%.1f%%)\nTime: %v\nSpeed: %.0f games/sec",
-		runs, wins, float64(wins)/float64(runs)*100, duration, float64(runs)/duration.Seconds())
+	modeName := "Hybrid"
+	if benchMode == solver.ModePureAI {
+		modeName = "Pure AI"
+	}
+
+	return fmt.Sprintf("Benchmark Finished (%s):\nRuns: %d, Wins: %d (%.1f%%)\nTime: %v\nSpeed: %.0f games/sec",
+		modeName, runs, wins, float64(wins)/float64(runs)*100, duration, float64(runs)/duration.Seconds())
 }
 
-// --- Wrappers ---
+// --- Wrapper Functions ---
 
 func newGameWrapper(_ js.Value, args []js.Value) interface{} {
 	w, h, m := 10, 10, 10
@@ -187,29 +216,36 @@ func newGameWrapper(_ js.Value, args []js.Value) interface{} {
 	}
 	return session.NewGame(w, h, m)
 }
+
 func openCellWrapper(_ js.Value, args []js.Value) interface{} {
 	if len(args) < 2 {
 		return nil
 	}
 	return session.Open(args[0].Int(), args[1].Int())
 }
+
 func toggleFlagWrapper(_ js.Value, args []js.Value) interface{} {
 	if len(args) < 2 {
 		return nil
 	}
 	return session.ToggleFlag(args[0].Int(), args[1].Int())
 }
+
 func botStepWrapper(_ js.Value, args []js.Value) interface{} {
 	return session.BotStep()
 }
 
 func main() {
 	c := make(chan struct{})
+
 	js.Global().Set("goNewGame", js.FuncOf(newGameWrapper))
 	js.Global().Set("goOpenCell", js.FuncOf(openCellWrapper))
 	js.Global().Set("goToggleFlag", js.FuncOf(toggleFlagWrapper))
 	js.Global().Set("goBotStep", js.FuncOf(botStepWrapper))
 	js.Global().Set("goRunBenchmark", js.FuncOf(runBenchmarkWrapper))
+	// 新規追加
+	js.Global().Set("goSetSolverMode", js.FuncOf(setSolverModeWrapper))
+
 	println("Go WebAssembly Initialized")
 	<-c
 }

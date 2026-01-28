@@ -220,5 +220,14 @@ function render(jsonStr) {
     });
 }
 
+function changeBotMode() {
+    const mode = document.getElementById('bot-mode').value;
+    if (typeof goSetSolverMode === 'function') {
+        const msg = goSetSolverMode(mode);
+        console.log(msg);
+        updateStatus(msg);
+    }
+}
+
 function openCell(x, y) { if(typeof goOpenCell === 'function') render(goOpenCell(x, y)); }
 function toggleFlag(x, y) { if(typeof goToggleFlag === 'function') render(goToggleFlag(x, y)); }

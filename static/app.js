@@ -94,7 +94,48 @@ function toggleFlag(x, y) {
     }
 }
 
+// 1手だけBotを動かす
+function runBotStep() {
+    if (typeof goBotStep === 'function') {
+        const jsonStr = goBotStep();
+        render(jsonStr);
+    }
+}
+
+// 自動再生用
+let autoBotInterval = null;
+
+function toggleAutoBot() {
+    if (autoBotInterval) {
+        // 停止
+        clearInterval(autoBotInterval);
+        autoBotInterval = null;
+        console.log("Auto Bot Stopped");
+    } else {
+        // 開始（0.1秒ごとに実行）
+        console.log("Auto Bot Started");
+        autoBotInterval = setInterval(() => {
+            if (typeof goBotStep === 'function') {
+                const jsonStr = goBotStep();
+                
+                // ゲーム終了判定をして止める
+                const state = JSON.parse(jsonStr || "{}");
+                if (state.is_game_over || state.is_game_clear) {
+                    clearInterval(autoBotInterval);
+                    autoBotInterval = null;
+                }
+                
+                render(jsonStr);
+            }
+        }, 100);
+    }
+}
+
 function resetGame() {
+    if (autoBotInterval) {
+        clearInterval(autoBotInterval);
+        autoBotInterval = null;
+    }
     if (typeof goNewGame === 'function') {
         const jsonStr = goNewGame();
         render(jsonStr);

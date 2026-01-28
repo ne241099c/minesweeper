@@ -6,6 +6,7 @@ import (
 	"syscall/js"
 
 	"minesweeper/game"
+	"minesweeper/solver"
 	"minesweeper/viewmodel"
 )
 
@@ -41,8 +42,6 @@ func (s *GameSession) ToggleFlag(x, y int) string {
 	return viewmodel.NewGameView(s.board)
 }
 
-// --- 以下、JavaScriptから呼ばれるラッパー関数 ---
-
 func newGameWrapper(this js.Value, args []js.Value) interface{} {
 	// 将来的に引数で難易度設定を受け取れるように拡張可能
 	return session.NewGame(10, 10, 10)
@@ -66,6 +65,36 @@ func toggleFlagWrapper(this js.Value, args []js.Value) interface{} {
 	return session.ToggleFlag(x, y)
 }
 
+// BotStep はBotに1手進めさせます
+func (s *GameSession) BotStep() string {
+	if s.board == nil || s.board.CheckClear() {
+		return ""
+	}
+
+	// Botを初期化して次の手を計算
+	bot := solver.New(s.board)
+	move := bot.NextMove()
+
+	if move == nil {
+		return viewmodel.NewGameView(s.board) // 打つ手なし
+	}
+
+	// 行動を実行
+	switch move.Type {
+	case solver.MoveOpen:
+		s.board.Open(move.X, move.Y)
+	case solver.MoveFlag:
+		s.board.ToggleFlag(move.X, move.Y)
+	}
+
+	return viewmodel.NewGameView(s.board)
+}
+
+// JSから呼ばれるラッパー関数
+func botStepWrapper(this js.Value, args []js.Value) interface{} {
+	return session.BotStep()
+}
+
 func main() {
 	c := make(chan struct{})
 
@@ -73,6 +102,7 @@ func main() {
 	js.Global().Set("goNewGame", js.FuncOf(newGameWrapper))
 	js.Global().Set("goOpenCell", js.FuncOf(openCellWrapper))
 	js.Global().Set("goToggleFlag", js.FuncOf(toggleFlagWrapper))
+	js.Global().Set("goBotStep", js.FuncOf(botStepWrapper))
 
 	println("Go WebAssembly Initialized (Refactored)")
 

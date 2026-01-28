@@ -14,6 +14,11 @@ body {
     margin-top: 20px;
 }
 
+#RemainingMines {
+    font-size: 20px;
+    margin-bottom: 10px;
+}
+
 .cell {
     width: 30px;
     height: 30px;
@@ -25,6 +30,7 @@ body {
     font-weight: bold;
     user-select: none;
 }
+
 
 .cell:hover { background-color: #aaa; }
 .cell.opened { background-color: #ddd; color: black; cursor: default; }

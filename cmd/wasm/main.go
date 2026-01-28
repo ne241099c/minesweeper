@@ -126,7 +126,7 @@ func botStepWrapper(this js.Value, args []js.Value) interface{} {
 }
 
 func main() {
-	c := make(chan struct{}, 0)
+	c := make(chan struct{})
 
 	js.Global().Set("goNewGame", js.FuncOf(newGameWrapper))
 	js.Global().Set("goOpenCell", js.FuncOf(openCellWrapper))

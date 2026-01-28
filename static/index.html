@@ -7,7 +7,7 @@
     <script src="app.js"></script>
 </head>
 <body>
-    <h1>Minesweeper Bot</h1>
+    <h1>Minesweeper AI Project</h1>
 
     <div class="controls">
         <div class="input-group">
@@ -27,10 +27,11 @@
             <label>Runs</label><input type="number" id="bot-runs" value="100">
         </div>
         
-        <button id="start-btn" onclick="startBotLoop()" class="btn-primary">▶ Watch Bot</button>
+        <button onclick="startBotLoop()" class="btn-primary">▶ Watch Bot</button>
         <button id="bot-pause-btn" onclick="toggleBotLoop()" class="btn-danger">⏸ Pause</button>
         
-        <button onclick="runBenchmark()" class="btn-warning">⚡ Benchmark (Fast)</button>
+        <button onclick="runBenchmark()" class="btn-warning">⚡ Benchmark</button>
+        <button onclick="clearLog()" class="btn-secondary">Clear Log</button>
     </div>
 
     <h3>Mines: <span id="mine-count">--</span> | <span id="status"></span></h3>

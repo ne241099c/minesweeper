@@ -26,9 +26,6 @@ function resetGame(isBotReset = false) {
     if (!isBotReset) {
         stopBotLoop();
     }
-    // 手動リセット時はレポートログをクリアしたい場合はここで処理
-    // document.getElementById('game-report-log')?.remove();
-
     if (typeof goNewGame === 'function') {
         const { w, h, m } = getSettings();
         const jsonStr = goNewGame(w, h, m);
@@ -38,14 +35,12 @@ function resetGame(isBotReset = false) {
 
 function startBotLoop() {
     if (botLoopState.isRunning) return;
-
     const runs = parseInt(document.getElementById('bot-runs').value) || 1;
     botLoopState.maxRuns = runs;
     botLoopState.currentRun = 0;
     botLoopState.wins = 0;
     botLoopState.isRunning = true;
     botLoopState.isPaused = false;
-    
     updatePauseButton();
     resetGame(true);
     runBotInterval();
@@ -94,12 +89,9 @@ function runBotInterval() {
             render(jsonStr);
 
             if (state.is_game_over || state.is_game_clear) {
-                // インターバル停止はせず、次へ進む
                 clearInterval(botLoopState.intervalId);
-                
                 if (state.is_game_clear) botLoopState.wins++;
                 botLoopState.currentRun++;
-                
                 updateStatus(`Game ${botLoopState.currentRun}/${botLoopState.maxRuns} (Wins: ${botLoopState.wins})`);
 
                 if (botLoopState.currentRun < botLoopState.maxRuns) {
@@ -107,7 +99,7 @@ function runBotInterval() {
                         if (!botLoopState.isRunning) return;
                         resetGame(true);
                         runBotInterval();
-                    }, 500); // 0.5秒ウェイト
+                    }, 500);
                 } else {
                     stopBotLoop();
                     updateStatus(`Finished! Win Rate: ${((botLoopState.wins/botLoopState.maxRuns)*100).toFixed(1)}%`);
@@ -126,11 +118,21 @@ function runBenchmark() {
     
     setTimeout(() => {
         if (typeof goRunBenchmark === 'function') {
-            const result = goRunBenchmark(w, h, m, runs);
-            logReport(result); // ベンチマーク結果も下のログに出す
+            // 第5引数にログ出力用のコールバック関数を渡す
+            const result = goRunBenchmark(w, h, m, runs, (logMsg) => {
+                logReport(logMsg);
+            });
+            logReport(result); // 最終結果
             updateStatus("Benchmark finished.");
         }
     }, 100);
+}
+
+function clearLog() {
+    const logEl = document.getElementById('game-report-log');
+    if (logEl) {
+        logEl.innerText = '';
+    }
 }
 
 function updateStatus(msg) {
@@ -138,7 +140,6 @@ function updateStatus(msg) {
     if (el) el.innerText = msg;
 }
 
-// レポート出力用のヘルパー関数
 function logReport(reportText) {
     if (!reportText) return;
 
@@ -146,7 +147,6 @@ function logReport(reportText) {
     if (!logEl) {
         logEl = document.createElement('pre');
         logEl.id = 'game-report-log';
-        // スタイル設定（黒背景・緑文字・スクロール可能）
         Object.assign(logEl.style, {
             backgroundColor: '#1e1e1e',
             color: '#00ff00',
@@ -161,9 +161,9 @@ function logReport(reportText) {
         });
         document.body.appendChild(logEl);
     }
-    // 新しいレポートを一番上に追加
     const timestamp = new Date().toLocaleTimeString();
-    logEl.innerText = `[${timestamp}] \n${reportText}\n\n` + logEl.innerText;
+    // 最新を上に追加
+    logEl.innerText = `[${timestamp}] ${reportText}\n` + logEl.innerText;
 }
 
 function render(jsonStr) {
@@ -171,7 +171,6 @@ function render(jsonStr) {
     let gameState;
     try { gameState = JSON.parse(jsonStr); } catch(e) { return; }
     
-    // ★ここでレポート出力
     if (gameState.report) {
         logReport(gameState.report);
     }

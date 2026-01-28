@@ -86,3 +86,9 @@ button {
     color: white;
     margin-left: 20px;
 }
+
+.btn-secondary {
+    background: #555;
+    color: white;
+    margin-left: 10px;
+}

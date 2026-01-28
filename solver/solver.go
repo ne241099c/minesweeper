@@ -41,7 +41,6 @@ func New(b *game.Board) *Solver {
 }
 
 func (s *Solver) NextMove() *Move {
-	// 1. 基本ロジック（単一マス）: 安全
 	if move := s.findSafeMove(); move != nil {
 		move.IsGuess = false
 		move.Strategy = "Logic"
@@ -49,7 +48,6 @@ func (s *Solver) NextMove() *Move {
 		return move
 	}
 
-	// 2. 基本ロジック（単一マス）: 地雷
 	if move := s.findFlagMove(); move != nil {
 		move.IsGuess = false
 		move.Strategy = "Logic"
@@ -57,7 +55,6 @@ func (s *Solver) NextMove() *Move {
 		return move
 	}
 
-	// ★追加: 3. 発展ロジック（複数マスの関係性）
 	if move := s.findAdvancedMove(); move != nil {
 		move.IsGuess = false
 		move.Strategy = "Advanced" // レポートで見分けられるように
@@ -65,7 +62,16 @@ func (s *Solver) NextMove() *Move {
 		return move
 	}
 
-	// 4. AI または ランダム
+	if move := s.findTankMove(); move != nil {
+		// 確率100%ならGuessではない、それ以外はGuess扱いだが「高精度なGuess」
+		if move.Confidence == 1.0 {
+			move.IsGuess = false
+		} else {
+			move.IsGuess = true
+		}
+		return move
+	}
+
 	move := s.findRandomMove()
 	if move != nil {
 		move.IsGuess = true
@@ -339,4 +345,9 @@ func (s *Solver) getNeighborsInfo(cx, cy int) (totalHidden int, flags int, hidde
 		}
 	}
 	return
+}
+
+func (s *Solver) findTankMove() *Move {
+	tank := NewTankSolver(s.Board)
+	return tank.Solve()
 }

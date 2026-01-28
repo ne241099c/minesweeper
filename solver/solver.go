@@ -6,7 +6,11 @@ import (
 	"time"
 )
 
-// MoveType は行動の種類（開ける or 旗を立てる）
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
+// MoveType は行動の種類
 type MoveType int
 
 const (
@@ -30,19 +34,14 @@ func New(b *game.Board) *Solver {
 	return &Solver{Board: b}
 }
 
-// NextMove は次の最適な一手（またはランダムな一手）を返します
+// NextMove は次の最適な一手を返します
 func (s *Solver) NextMove() *Move {
-	// 1. 論理的に「絶対に安全」なマスを探す
 	if move := s.findSafeMove(); move != nil {
 		return move
 	}
-
-	// 2. 論理的に「絶対に地雷」なマスを探す
 	if move := s.findFlagMove(); move != nil {
 		return move
 	}
-
-	// 3. 論理でわからなければ、ランダムに開ける
 	return s.findRandomMove()
 }
 

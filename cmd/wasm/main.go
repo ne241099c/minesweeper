@@ -3,97 +3,135 @@
 package main
 
 import (
+	"fmt"
 	"syscall/js"
+	"time"
 
 	"minesweeper/game"
 	"minesweeper/solver"
 	"minesweeper/viewmodel"
 )
 
-// GameSession はゲームの状態を保持・管理します
 type GameSession struct {
 	board *game.Board
 }
 
 var session = &GameSession{}
 
-// NewGame は新しいゲームを開始します
-func (s *GameSession) NewGame(width, height, mineCount int) string {
+// NewGame: autoOpen引数を追加
+func (s *GameSession) NewGame(width, height, mineCount int, autoOpen bool) string {
 	s.board = game.NewBoard(width, height, mineCount)
+
+	// 最初にランダムで1マス開けるオプション
+	if autoOpen {
+		// Solverのランダムロジックを借用して安全な場所（未開封）を一つ選ぶ
+		bot := solver.New(s.board)
+		if move := bot.NextMove(); move != nil {
+			s.board.Open(move.X, move.Y)
+		}
+	}
+
 	return viewmodel.NewGameView(s.board)
 }
 
-// Open は指定されたセルを開きます
 func (s *GameSession) Open(x, y int) string {
 	if s.board == nil {
-		return ""
+		return "{}"
 	}
 	s.board.Open(x, y)
 	return viewmodel.NewGameView(s.board)
 }
 
-// ToggleFlag はフラグを切り替えます
 func (s *GameSession) ToggleFlag(x, y int) string {
 	if s.board == nil {
-		return ""
+		return "{}"
 	}
 	s.board.ToggleFlag(x, y)
 	return viewmodel.NewGameView(s.board)
 }
 
-// BotStep はBotに1手進めさせます
 func (s *GameSession) BotStep() string {
-	if s.board == nil {
-		return ""
+	if s.board == nil || s.board.CheckClear() {
+		return "{}"
 	}
-
-	// ゲームが既に終了している場合は現在の状態を返す
-	if s.board.IsGameOver || s.board.CheckClear() {
-		return viewmodel.NewGameView(s.board)
-	}
-
-	// ボードが初期化されていない場合、最初に中央のセルを開く
-	if !s.board.IsInitialized {
-		centerX := s.board.Width / 2
-		centerY := s.board.Height / 2
-		s.board.Open(centerX, centerY)
-		return viewmodel.NewGameView(s.board)
-	}
-
-	// Botを初期化して次の手を計算
 	bot := solver.New(s.board)
-	move := bot.NextMove()
-
-	if move == nil {
-		return viewmodel.NewGameView(s.board) // 打つ手なし
+	if move := bot.NextMove(); move != nil {
+		if move.Type == solver.MoveOpen {
+			s.board.Open(move.X, move.Y)
+		} else {
+			s.board.ToggleFlag(move.X, move.Y)
+		}
 	}
-
-	// 行動を実行
-	switch move.Type {
-	case solver.MoveOpen:
-		s.board.Open(move.X, move.Y)
-	case solver.MoveFlag:
-		s.board.ToggleFlag(move.X, move.Y)
-	}
-
 	return viewmodel.NewGameView(s.board)
 }
 
-func newGameWrapper(this js.Value, args []js.Value) interface{} {
-	// デフォルト値
-	w, h, m := 10, 10, 10
+// --- ベンチマーク機能（高速周回） ---
+func runBenchmarkWrapper(this js.Value, args []js.Value) interface{} {
+	width := args[0].Int()
+	height := args[1].Int()
+	mines := args[2].Int()
+	runs := args[3].Int()
 
-	// 引数があれば上書き (JS側から goNewGame(w, h, m) と呼ばれる想定)
+	wins := 0
+	start := time.Now()
+
+	for i := 0; i < runs; i++ {
+		// 画面更新なしでゲームを作成
+		b := game.NewBoard(width, height, mines)
+		bot := solver.New(b)
+
+		// ゲーム終了までループ
+		for {
+			// クリアかゲームオーバーで終了
+			if b.CheckClear() {
+				wins++
+				break
+			}
+			// 地雷を踏んでいたら終了（CheckClearでは判定できない敗北状態）
+			// ※Solverは地雷を踏むとNextMoveを返さないわけではないが、
+			//   Board.Openがfalseを返した時点でループを抜ける必要がある
+
+			move := bot.NextMove()
+			if move == nil {
+				break // 手詰まり（通常ありえない）
+			}
+
+			if move.Type == solver.MoveOpen {
+				safe := b.Open(move.X, move.Y)
+				if !safe {
+					break // 爆発
+				}
+			} else {
+				b.ToggleFlag(move.X, move.Y)
+			}
+		}
+	}
+
+	duration := time.Since(start)
+
+	// 結果を文字列で返す
+	return fmt.Sprintf("Benchmark Result:\nRuns: %d\nWins: %d (%.1f%%)\nTime: %v\nSpeed: %.0f games/sec",
+		runs, wins, float64(wins)/float64(runs)*100, duration, float64(runs)/duration.Seconds())
+}
+
+// --- Wrapper ---
+
+func newGameWrapper(this js.Value, args []js.Value) interface{} {
+	w, h, m := 10, 10, 10
+	autoOpen := false
+
 	if len(args) >= 3 {
 		w = args[0].Int()
 		h = args[1].Int()
 		m = args[2].Int()
 	}
+	if len(args) >= 4 {
+		autoOpen = args[3].Bool()
+	}
 
-	return session.NewGame(w, h, m)
+	return session.NewGame(w, h, m, autoOpen)
 }
 
-// openCellWrapper, toggleFlagWrapper, botStepWrapper は変更なし
 func openCellWrapper(this js.Value, args []js.Value) interface{} {
 	if len(args) < 2 {
 		return nil
@@ -120,6 +158,9 @@ func main() {
 	js.Global().Set("goToggleFlag", js.FuncOf(toggleFlagWrapper))
 	js.Global().Set("goBotStep", js.FuncOf(botStepWrapper))
 
-	println("Go WebAssembly Initialized (Configurable)")
+	// 新機能
+	js.Global().Set("goRunBenchmark", js.FuncOf(runBenchmarkWrapper))
+
+	println("Go WebAssembly Initialized (Benchmark Ready)")
 	<-c
 }

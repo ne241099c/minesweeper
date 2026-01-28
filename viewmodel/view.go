@@ -17,10 +17,11 @@ type GameView struct {
 	MinesRemaining int          `json:"mines_remaining"`
 	IsGameOver     bool         `json:"is_game_over"`
 	IsGameClear    bool         `json:"is_game_clear"`
+	Report         string       `json:"report"`
 }
 
 // NewGameView は安全にJSONを返します
-func NewGameView(b *game.Board) string {
+func NewGameView(b *game.Board, report string) string {
 	// 【修正点】nilの場合は空のJSONオブジェクトを返す
 	if b == nil {
 		return "{}"
@@ -76,6 +77,7 @@ func NewGameView(b *game.Board) string {
 		MinesRemaining: b.MineCount - flagCount,
 		IsGameOver:     isGameOver,
 		IsGameClear:    isClear,
+		Report:         report,
 	}
 
 	bytes, _ := json.Marshal(view)

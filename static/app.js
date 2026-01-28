@@ -19,13 +19,15 @@ const botLoopState = {
     maxRuns: 0,
     wins: 0,
     isBotReset: false,
-    isPaused: false // ポーズフラグ
+    isPaused: false
 };
 
 function resetGame(isBotReset = false) {
     if (!isBotReset) {
         stopBotLoop();
     }
+    // 手動リセット時はレポートログをクリアしたい場合はここで処理
+    // document.getElementById('game-report-log')?.remove();
 
     if (typeof goNewGame === 'function') {
         const { w, h, m } = getSettings();
@@ -42,19 +44,15 @@ function startBotLoop() {
     botLoopState.currentRun = 0;
     botLoopState.wins = 0;
     botLoopState.isRunning = true;
-    botLoopState.isPaused = false; // 開始時はポーズ解除
+    botLoopState.isPaused = false;
     
-    // ボタンの見た目を更新
     updatePauseButton();
-    
     resetGame(true);
     runBotInterval();
 }
 
-// ポーズボタンの切り替え
 function toggleBotLoop() {
     if (!botLoopState.isRunning) return;
-
     botLoopState.isPaused = !botLoopState.isPaused;
     updatePauseButton();
 }
@@ -64,10 +62,10 @@ function updatePauseButton() {
     if (btn) {
         if (botLoopState.isPaused) {
             btn.innerText = "▶ Resume";
-            btn.style.backgroundColor = "#4CAF50"; // 緑色（再生）
+            btn.style.backgroundColor = "#4CAF50";
         } else {
             btn.innerText = "⏸ Pause";
-            btn.style.backgroundColor = "#f44336"; // 赤色（停止っぽい色）
+            btn.style.backgroundColor = "#f44336";
         }
     }
 }
@@ -77,7 +75,6 @@ function stopBotLoop() {
     botLoopState.isRunning = false;
     botLoopState.intervalId = null;
     botLoopState.isPaused = false;
-    // ボタンをPauseに戻しておく（次回用）
     updatePauseButton();
 }
 
@@ -87,11 +84,7 @@ function runBotInterval() {
             stopBotLoop();
             return;
         }
-
-        // ポーズ中は処理をスキップ
-        if (botLoopState.isPaused) {
-            return;
-        }
+        if (botLoopState.isPaused) return;
 
         if (typeof goBotStep === 'function') {
             const jsonStr = goBotStep();
@@ -101,10 +94,7 @@ function runBotInterval() {
             render(jsonStr);
 
             if (state.is_game_over || state.is_game_clear) {
-                // ここではインターバルを止めず、次へ進む処理をする
-                // ただし、もしここでポーズさせたいなら考慮が必要だが、
-                // 今回は「ゲーム終了→次へ」の流れは止まらないものとする
-                
+                // インターバル停止はせず、次へ進む
                 clearInterval(botLoopState.intervalId);
                 
                 if (state.is_game_clear) botLoopState.wins++;
@@ -117,7 +107,7 @@ function runBotInterval() {
                         if (!botLoopState.isRunning) return;
                         resetGame(true);
                         runBotInterval();
-                    }, 500);
+                    }, 500); // 0.5秒ウェイト
                 } else {
                     stopBotLoop();
                     updateStatus(`Finished! Win Rate: ${((botLoopState.wins/botLoopState.maxRuns)*100).toFixed(1)}%`);
@@ -127,7 +117,6 @@ function runBotInterval() {
     }, 50);
 }
 
-// ベンチマーク実行
 function runBenchmark() {
     stopBotLoop();
     const { w, h, m } = getSettings();
@@ -138,7 +127,7 @@ function runBenchmark() {
     setTimeout(() => {
         if (typeof goRunBenchmark === 'function') {
             const result = goRunBenchmark(w, h, m, runs);
-            alert(result);
+            logReport(result); // ベンチマーク結果も下のログに出す
             updateStatus("Benchmark finished.");
         }
     }, 100);
@@ -149,10 +138,43 @@ function updateStatus(msg) {
     if (el) el.innerText = msg;
 }
 
+// レポート出力用のヘルパー関数
+function logReport(reportText) {
+    if (!reportText) return;
+
+    let logEl = document.getElementById('game-report-log');
+    if (!logEl) {
+        logEl = document.createElement('pre');
+        logEl.id = 'game-report-log';
+        // スタイル設定（黒背景・緑文字・スクロール可能）
+        Object.assign(logEl.style, {
+            backgroundColor: '#1e1e1e',
+            color: '#00ff00',
+            padding: '15px',
+            borderRadius: '5px',
+            marginTop: '20px',
+            fontFamily: 'monospace',
+            whiteSpace: 'pre-wrap',
+            maxHeight: '300px',
+            overflowY: 'auto',
+            border: '1px solid #333'
+        });
+        document.body.appendChild(logEl);
+    }
+    // 新しいレポートを一番上に追加
+    const timestamp = new Date().toLocaleTimeString();
+    logEl.innerText = `[${timestamp}] \n${reportText}\n\n` + logEl.innerText;
+}
+
 function render(jsonStr) {
     if (!jsonStr || jsonStr === "{}") return;
     let gameState;
     try { gameState = JSON.parse(jsonStr); } catch(e) { return; }
+    
+    // ★ここでレポート出力
+    if (gameState.report) {
+        logReport(gameState.report);
+    }
     
     const board = document.getElementById('board');
     const w = gameState.cells[0].length;

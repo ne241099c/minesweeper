@@ -1,16 +1,16 @@
 package game
 
-// Cell は1つのマスの情報を持ちます
 type Cell struct {
-	IsMine        bool // 地雷かどうか
-	IsRevealed    bool // すでに開けられたか
-	IsFlagged     bool // フラグが立てられているか
-	NeighborCount int  // 周囲8マスにある地雷の数
+	IsMine        bool
+	IsRevealed    bool
+	IsFlagged     bool
+	NeighborCount int
 }
 
-// Board はゲーム盤面全体を持ちます
 type Board struct {
-	Width  int      // 横のマス数
-	Height int      // 縦のマス数
-	Cells  [][]Cell // 2次元配列でマスを管理
+	Width         int
+	Height        int
+	MineCount     int
+	Cells         [][]Cell
+	IsInitialized bool // 初回クリックが終わったかどうか
 }

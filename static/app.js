@@ -7,12 +7,31 @@ WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((resu
 });
 
 function render(jsonStr) {
-    const grid = JSON.parse(jsonStr);
+    const gameState = JSON.parse(jsonStr);
+    const grid = gameState.cells;
+    
     const board = document.getElementById('board');
     board.innerHTML = '';
+    
     const status = document.getElementById('status');
+    const mineCountSpan = document.getElementById('mine-count');
 
-    let gameOver = false;
+    // 残り地雷数の更新
+    mineCountSpan.innerText = gameState.mines_remaining;
+
+    // ステータス表示
+    if (gameState.is_game_over) {
+        status.innerText = "GAME OVER!";
+        status.style.color = "red";
+    } else if (gameState.is_game_clear) {
+        status.innerText = "GAME CLEAR!! 🎉";
+        status.style.color = "lime";
+    } else {
+        status.innerText = "";
+    }
+
+    // ゲーム終了時はクリックできないようにするフラグ
+    const isFinished = gameState.is_game_over || gameState.is_game_clear;
 
     grid.forEach((row, y) => {
         row.forEach((cell, x) => {
@@ -24,37 +43,32 @@ function render(jsonStr) {
                 if (cell.is_mine) {
                     div.classList.add('mine');
                     div.innerText = "💣";
-                    gameOver = true;
                 } else if (cell.count > 0) {
                     div.innerText = cell.count;
                     div.classList.add('n' + cell.count);
                 }
             } else if (cell.state === 'flagged') {
                 div.innerText = "🚩";
-                // 右クリックでフラッグ解除できるように
-                div.oncontextmenu = (e) => {
-                    e.preventDefault();
-                    toggleFlag(x, y);
-                };
+                // ゲーム中でなければ右クリック解除可能
+                if (!isFinished) {
+                    div.oncontextmenu = (e) => {
+                        e.preventDefault();
+                        toggleFlag(x, y);
+                    };
+                }
             } else {
                 // 未開封
-                div.onclick = () => openCell(x, y);
-                // 右クリックでフラッグ
-                div.oncontextmenu = (e) => {
-                    e.preventDefault();
-                    toggleFlag(x, y);
-                };
+                if (!isFinished) {
+                    div.onclick = () => openCell(x, y);
+                    div.oncontextmenu = (e) => {
+                        e.preventDefault();
+                        toggleFlag(x, y);
+                    };
+                }
             }
             board.appendChild(div);
         });
     });
-
-    if (gameOver) {
-        status.innerText = "GAME OVER!";
-        status.style.color = "red";
-    } else {
-        status.innerText = "";
-    }
 }
 
 // Goの関数を呼び出すラッパー

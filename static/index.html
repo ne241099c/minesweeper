@@ -15,6 +15,13 @@
         Remaining Mines: <span id="mine-count" style="font-weight: bold; color: yellow;">10</span>
     </div>
 
+    <div style="margin-bottom: 10px;">
+        Width: <input type="number" id="width" value="10" min="1" max="30" style="width: 50px;">
+        Height: <input type="number" id="height" value="10" min="1" max="30" style="width: 50px;">
+        Mines: <input type="number" id="mines" value="10" min="1" max="100" style="width: 50px;">
+        Bot Runs: <input type="number" id="bot-runs" value="1" min="1" max="1000" style="width: 50px;">
+    </div>
+
     <button onclick="resetGame()">New Game</button>
     <button onclick="runBotStep()" style="background-color: #4CAF50;">🤖 Bot Step</button>
     <button onclick="toggleAutoBot()" style="background-color: #2196F3;">🤖 Auto Play</button>

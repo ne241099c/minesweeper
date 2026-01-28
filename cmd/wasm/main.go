@@ -15,7 +15,6 @@ type GameSession struct {
 	board *game.Board
 }
 
-// アプリケーション全体で1つのセッションを管理
 var session = &GameSession{}
 
 // NewGame は新しいゲームを開始します
@@ -40,29 +39,6 @@ func (s *GameSession) ToggleFlag(x, y int) string {
 	}
 	s.board.ToggleFlag(x, y)
 	return viewmodel.NewGameView(s.board)
-}
-
-func newGameWrapper(this js.Value, args []js.Value) interface{} {
-	// 将来的に引数で難易度設定を受け取れるように拡張可能
-	return session.NewGame(10, 10, 10)
-}
-
-func openCellWrapper(this js.Value, args []js.Value) interface{} {
-	if len(args) < 2 {
-		return nil
-	}
-	x := args[0].Int()
-	y := args[1].Int()
-	return session.Open(x, y)
-}
-
-func toggleFlagWrapper(this js.Value, args []js.Value) interface{} {
-	if len(args) < 2 {
-		return nil
-	}
-	x := args[0].Int()
-	y := args[1].Int()
-	return session.ToggleFlag(x, y)
 }
 
 // BotStep はBotに1手進めさせます
@@ -90,7 +66,35 @@ func (s *GameSession) BotStep() string {
 	return viewmodel.NewGameView(s.board)
 }
 
-// JSから呼ばれるラッパー関数
+func newGameWrapper(this js.Value, args []js.Value) interface{} {
+	// デフォルト値
+	w, h, m := 10, 10, 10
+
+	// 引数があれば上書き (JS側から goNewGame(w, h, m) と呼ばれる想定)
+	if len(args) >= 3 {
+		w = args[0].Int()
+		h = args[1].Int()
+		m = args[2].Int()
+	}
+
+	return session.NewGame(w, h, m)
+}
+
+// openCellWrapper, toggleFlagWrapper, botStepWrapper は変更なし
+func openCellWrapper(this js.Value, args []js.Value) interface{} {
+	if len(args) < 2 {
+		return nil
+	}
+	return session.Open(args[0].Int(), args[1].Int())
+}
+
+func toggleFlagWrapper(this js.Value, args []js.Value) interface{} {
+	if len(args) < 2 {
+		return nil
+	}
+	return session.ToggleFlag(args[0].Int(), args[1].Int())
+}
+
 func botStepWrapper(this js.Value, args []js.Value) interface{} {
 	return session.BotStep()
 }
@@ -98,13 +102,11 @@ func botStepWrapper(this js.Value, args []js.Value) interface{} {
 func main() {
 	c := make(chan struct{})
 
-	// JSへの関数登録
 	js.Global().Set("goNewGame", js.FuncOf(newGameWrapper))
 	js.Global().Set("goOpenCell", js.FuncOf(openCellWrapper))
 	js.Global().Set("goToggleFlag", js.FuncOf(toggleFlagWrapper))
 	js.Global().Set("goBotStep", js.FuncOf(botStepWrapper))
 
-	println("Go WebAssembly Initialized (Refactored)")
-
+	println("Go WebAssembly Initialized (Configurable)")
 	<-c
 }

@@ -23,7 +23,7 @@ type Move struct {
 	X, Y       int
 	Type       MoveType
 	IsGuess    bool    // 運任せかどうか
-	Strategy   string  // "Logic", "AI", "Random"
+	Strategy   string  // "Logic", "Advanced", "AI", "Random"
 	Confidence float64 // 0.0 ~ 1.0 (安全確率)
 }
 
@@ -41,7 +41,7 @@ func New(b *game.Board) *Solver {
 }
 
 func (s *Solver) NextMove() *Move {
-	// 1. 論理的に「絶対に安全」
+	// 1. 基本ロジック（単一マス）: 安全
 	if move := s.findSafeMove(); move != nil {
 		move.IsGuess = false
 		move.Strategy = "Logic"
@@ -49,7 +49,7 @@ func (s *Solver) NextMove() *Move {
 		return move
 	}
 
-	// 2. 論理的に「絶対に地雷」
+	// 2. 基本ロジック（単一マス）: 地雷
 	if move := s.findFlagMove(); move != nil {
 		move.IsGuess = false
 		move.Strategy = "Logic"
@@ -57,7 +57,15 @@ func (s *Solver) NextMove() *Move {
 		return move
 	}
 
-	// 3. AI または ランダム
+	// ★追加: 3. 発展ロジック（複数マスの関係性）
+	if move := s.findAdvancedMove(); move != nil {
+		move.IsGuess = false
+		move.Strategy = "Advanced" // レポートで見分けられるように
+		move.Confidence = 1.0
+		return move
+	}
+
+	// 4. AI または ランダム
 	move := s.findRandomMove()
 	if move != nil {
 		move.IsGuess = true
@@ -103,10 +111,132 @@ func (s *Solver) findFlagMove() *Move {
 	return nil
 }
 
+// ★追加: 集合論を使った発展ロジック
+func (s *Solver) findAdvancedMove() *Move {
+	// 全ての開いている数字マスを走査
+	for y1 := 0; y1 < s.Board.Height; y1++ {
+		for x1 := 0; x1 < s.Board.Width; x1++ {
+			c1 := s.Board.Cells[y1][x1]
+			if !c1.IsRevealed || c1.NeighborCount == 0 {
+				continue
+			}
+
+			// c1の未確定情報
+			_, f1, h1 := s.getNeighborsInfo(x1, y1)
+			needed1 := c1.NeighborCount - f1
+			if len(h1) == 0 {
+				continue
+			}
+
+			// c1の周囲にある、別の数字マスc2を探す
+			// (c1の隣接マスだけでなく、c1の隣接未開封マスを共有している可能性のある範囲を見るべきだが、
+			//  簡易的に「ボード全体」または「c1の近傍」を探索する。
+			//  ここでは計算量を抑えるため「c1から距離2以内」などを探索するのが一般的だが、
+			//  実装を簡単にするため「c1の隣接未開封マスを共有している数字マス」を探すアプローチをとる)
+
+			// アプローチ: 全探索は重いので、h1（c1の空きマス）のどれかに隣接している数字マスを探す
+			checkedNeighbors := make(map[int]bool) // 重複チェック用 (y*width + x)
+
+			for _, emptyPos := range h1 {
+				// emptyPosの周囲を調べる
+				for dy := -1; dy <= 1; dy++ {
+					for dx := -1; dx <= 1; dx++ {
+						nx, ny := emptyPos.x+dx, emptyPos.y+dy
+						if nx < 0 || nx >= s.Board.Width || ny < 0 || ny >= s.Board.Height {
+							continue
+						}
+						if nx == x1 && ny == y1 {
+							continue
+						} // 自分自身はスキップ
+
+						key := ny*s.Board.Width + nx
+						if checkedNeighbors[key] {
+							continue
+						}
+						checkedNeighbors[key] = true
+
+						c2 := s.Board.Cells[ny][nx]
+						if !c2.IsRevealed || c2.NeighborCount == 0 {
+							continue
+						}
+
+						// c2が見つかった。c1とc2の関係を調べる。
+						_, f2, h2 := s.getNeighborsInfo(nx, ny)
+						needed2 := c2.NeighborCount - f2
+
+						// 判定: h1 が h2 の部分集合か？ (h1 ⊆ h2)
+						if isSubset(h1, h2) {
+							// 差分を計算 (diff = h2 - h1)
+							diff := getDifference(h2, h1)
+							if len(diff) == 0 {
+								continue
+							}
+
+							minesInDiff := needed2 - needed1
+
+							if minesInDiff == 0 {
+								// 差分はすべて「安全」
+								target := diff[0]
+								return &Move{X: target.x, Y: target.y, Type: MoveOpen}
+							} else if minesInDiff == len(diff) {
+								// 差分はすべて「地雷」
+								target := diff[0]
+								// まだ旗が立っていないものを返す
+								if !s.Board.Cells[target.y][target.x].IsFlagged {
+									return &Move{X: target.x, Y: target.y, Type: MoveFlag}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// ヘルパー: subsetがsupersetに含まれているか
+func isSubset(subset, superset []pos) bool {
+	if len(subset) > len(superset) {
+		return false
+	}
+	for _, p1 := range subset {
+		found := false
+		for _, p2 := range superset {
+			if p1.x == p2.x && p1.y == p2.y {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+// ヘルパー: superset - subset の差分を返す
+func getDifference(superset, subset []pos) []pos {
+	diff := []pos{}
+	for _, p2 := range superset {
+		isShared := false
+		for _, p1 := range subset {
+			if p1.x == p2.x && p1.y == p2.y {
+				isShared = true
+				break
+			}
+		}
+		if !isShared {
+			diff = append(diff, p2)
+		}
+	}
+	return diff
+}
+
+// ... findRandomMove, findPureRandomMove は変更なし ...
 func (s *Solver) findRandomMove() *Move {
-	// AIが使える場合
 	if s.AiNet != nil {
-		bestProb := 1.0 // 地雷確率（低いほうが良い）
+		bestProb := 1.0
 		var bestMove *Move
 
 		for y := 0; y < s.Board.Height; y++ {
@@ -116,14 +246,13 @@ func (s *Solver) findRandomMove() *Move {
 					input := s.createAiInput(x, y)
 					prob := s.AiNet.Predict(input)
 
-					// より安全なマスが見つかったら更新
 					if prob < bestProb {
 						bestProb = prob
 						bestMove = &Move{
 							X: x, Y: y,
 							Type:       MoveOpen,
 							Strategy:   "AI",
-							Confidence: 1.0 - prob, // 安全確率
+							Confidence: 1.0 - prob,
 						}
 					}
 				}
@@ -133,7 +262,6 @@ func (s *Solver) findRandomMove() *Move {
 			return bestMove
 		}
 	}
-
 	return s.findPureRandomMove()
 }
 

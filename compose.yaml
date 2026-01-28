@@ -1,0 +1,12 @@
+services:
+  app:
+    # 現在のディレクトリにあるDockerfileを使ってビルドする
+    build: .
+    # コンテナの名前
+    container_name: minesweeper-dev
+    # PCの現在のフォルダ(.)を、コンテナの/appに同期する
+    # これにより、PCでコードを編集するとコンテナ内にも即座に反映されます
+    volumes:
+      - .:/app
+    # コンテナを起動しっぱなしにする設定
+    tty: true
